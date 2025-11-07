@@ -1,9 +1,12 @@
 use axum::serve::Listener;
 use std::net::ToSocketAddrs;
+#[cfg(unix)]
 use tokio::net::UnixListener;
 
+/// A listener that
 pub enum DuplexListener {
     Tcp(tokio::net::TcpListener),
+    #[cfg(unix)]
     Uds(tokio::net::UnixListener),
 }
 
@@ -11,12 +14,14 @@ pub enum DuplexListener {
 #[allow(dead_code)]
 pub enum DuplexAddr {
     Tcp(core::net::SocketAddr),
+    #[cfg(unix)]
     Uds(tokio::net::unix::SocketAddr),
 }
 
 #[cfg(feature = "remove-on-drop")]
 impl Drop for DuplexAddr {
     fn drop(&mut self) {
+        #[cfg(unix)]
         if let DuplexAddr::Uds(addr) = self {
             if let Some(path) = addr.as_pathname() {
                 let _ = std::fs::remove_file(path);
@@ -31,6 +36,7 @@ impl From<core::net::SocketAddr> for DuplexAddr {
     }
 }
 
+#[cfg(unix)]
 impl From<tokio::net::unix::SocketAddr> for DuplexAddr {
     fn from(addr: tokio::net::unix::SocketAddr) -> Self {
         DuplexAddr::Uds(addr)
@@ -46,9 +52,19 @@ impl core::str::FromStr for DuplexAddr {
         let tcp_like = s.to_socket_addrs().is_ok();
 
         if unix_like && has_uds && !tcp_like {
-            let path = s.trim_start_matches("unix:");
-            let addr = From::from(std::os::unix::net::SocketAddr::from_pathname(path)?);
-            Ok(DuplexAddr::Uds(addr))
+            #[cfg(unix)]
+            {
+                let path = s.trim_start_matches("unix:");
+                let addr = From::from(std::os::unix::net::SocketAddr::from_pathname(path)?);
+                Ok(DuplexAddr::Uds(addr))
+            }
+            #[cfg(not(unix))]
+            {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Unix domain sockets are not supported on this platform",
+                ))
+            }
         } else if tcp_like {
             let addr = s.to_socket_addrs()?.next().ok_or_else(|| {
                 std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid TCP address")
@@ -90,6 +106,7 @@ impl ToDuplexAddr for core::net::SocketAddr {
     }
 }
 
+#[cfg(unix)]
 impl ToDuplexAddr for tokio::net::unix::SocketAddr {
     fn to_duplex_addr(&self) -> Result<DuplexAddr, std::io::Error> {
         Ok(DuplexAddr::Uds(self.clone()))
@@ -108,6 +125,7 @@ impl ToDuplexAddr for &DuplexAddr {
     }
 }
 
+#[cfg(unix)]
 impl ToDuplexAddr for &std::path::Path {
     fn to_duplex_addr(&self) -> Result<DuplexAddr, std::io::Error> {
         Ok(DuplexAddr::Uds(From::from(
@@ -116,6 +134,7 @@ impl ToDuplexAddr for &std::path::Path {
     }
 }
 
+#[cfg(unix)]
 impl ToDuplexAddr for std::path::PathBuf {
     fn to_duplex_addr(&self) -> Result<DuplexAddr, std::io::Error> {
         self.as_path().to_duplex_addr()
@@ -141,6 +160,11 @@ impl DuplexListener {
                 let listener = UnixListener::bind(path)?;
                 Ok(DuplexListener::Uds(listener))
             }
+            #[cfg(not(unix))]
+            DuplexAddr::Uds(_) => Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Unix domain sockets are not supported on this platform",
+            )),
         }
     }
 }
@@ -172,6 +196,7 @@ impl tokio::io::AsyncRead for DuplexStream {
     ) -> std::task::Poll<std::io::Result<()>> {
         match self.get_mut() {
             DuplexStream::Tcp(stream) => std::pin::Pin::new(stream).poll_read(cx, buf),
+            #[cfg(unix)]
             DuplexStream::Uds(stream) => std::pin::Pin::new(stream).poll_read(cx, buf),
         }
     }
@@ -185,6 +210,7 @@ impl tokio::io::AsyncWrite for DuplexStream {
     ) -> std::task::Poll<std::io::Result<usize>> {
         match self.get_mut() {
             DuplexStream::Tcp(stream) => std::pin::Pin::new(stream).poll_write(cx, buf),
+            #[cfg(unix)]
             DuplexStream::Uds(stream) => std::pin::Pin::new(stream).poll_write(cx, buf),
         }
     }
@@ -195,6 +221,7 @@ impl tokio::io::AsyncWrite for DuplexStream {
     ) -> std::task::Poll<std::io::Result<()>> {
         match self.get_mut() {
             DuplexStream::Tcp(stream) => std::pin::Pin::new(stream).poll_flush(cx),
+            #[cfg(unix)]
             DuplexStream::Uds(stream) => std::pin::Pin::new(stream).poll_flush(cx),
         }
     }
@@ -205,6 +232,7 @@ impl tokio::io::AsyncWrite for DuplexStream {
     ) -> std::task::Poll<std::io::Result<()>> {
         match self.get_mut() {
             DuplexStream::Tcp(stream) => std::pin::Pin::new(stream).poll_shutdown(cx),
+            #[cfg(unix)]
             DuplexStream::Uds(stream) => std::pin::Pin::new(stream).poll_shutdown(cx),
         }
     }

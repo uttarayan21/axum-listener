@@ -6,14 +6,14 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-axum = { version = "0.8.6", default-features = false }
+axum = { version = "0.8.6", default-features = false, features = ["tokio"] }
 tokio = { version = "1.48.0", default-features = false, features = ["net"] }
 
 [dev-dependencies]
-axum = { version = "0.8.6", features = ["http1"] }
+axum = { version = "0.8.6" }
 
 [features]
 default = ["http1", "remove-on-drop"]
 remove-on-drop = []                   # Removes the uds socket file on drop
-http1 = ["axum/http1"]                # Enables HTTP/1 support in axum
-http2 = ["axum/http2"]                # Enables HTTP/2 support in axum
+http1 = ["axum/http1", "axum/tokio"]  # Enables HTTP/1 support in axum
+http2 = ["axum/http2", "axum/tokio"]  # Enables HTTP/2 support in axum
