@@ -1,0 +1,20 @@
+[package]
+name = "duplex-listener"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+axum = { version = "0.8.6", default-features = false }
+error-stack = "0.6"
+thiserror = "2.0"
+tokio = { version = "1.48.0", default-features = false, features = ["net"] }
+tracing = "0.1"
+
+[dev-dependencies]
+axum = { version = "0.8.6", features = ["tokio", "http1", "http2"] }
+
+[features]
+
+remove-on-drop = [] # Removes the uds socket file on drop
