@@ -14,6 +14,7 @@ pub enum DuplexAddr {
     Uds(tokio::net::unix::SocketAddr),
 }
 
+#[cfg(feature = "remove-on-drop")]
 impl Drop for DuplexAddr {
     fn drop(&mut self) {
         if let DuplexAddr::Uds(addr) = self {
@@ -146,6 +147,7 @@ impl DuplexListener {
 
 pub enum DuplexStream {
     Tcp(tokio::net::TcpStream),
+    #[cfg(unix)]
     Uds(tokio::net::UnixStream),
 }
 

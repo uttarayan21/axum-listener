@@ -1,5 +1,5 @@
 [package]
-name = "duplex-listener"
+name = "axum-listener"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,14 +7,13 @@ edition = "2021"
 
 [dependencies]
 axum = { version = "0.8.6", default-features = false }
-error-stack = "0.6"
-thiserror = "2.0"
 tokio = { version = "1.48.0", default-features = false, features = ["net"] }
-tracing = "0.1"
 
 [dev-dependencies]
-axum = { version = "0.8.6", features = ["tokio", "http1", "http2"] }
+axum = { version = "0.8.6", features = ["http1"] }
 
 [features]
-
-remove-on-drop = [] # Removes the uds socket file on drop
+default = ["http1", "remove-on-drop"]
+remove-on-drop = []                   # Removes the uds socket file on drop
+http1 = ["axum/http1"]                # Enables HTTP/1 support in axum
+http2 = ["axum/http2"]                # Enables HTTP/2 support in axum
