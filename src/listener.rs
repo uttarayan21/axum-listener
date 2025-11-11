@@ -3,17 +3,66 @@ use std::net::ToSocketAddrs;
 #[cfg(unix)]
 use tokio::net::UnixListener;
 
-/// A listener that
+/// A unified listener that can bind to either TCP or Unix Domain Socket addresses.
+///
+/// This enum allows you to create a single listener type that can handle both TCP and UDS
+/// connections transparently. The specific variant is determined at runtime based on the
+/// address format provided to [`DuplexListener::bind`].
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # tokio_test::block_on(async {
+/// use axum_listener::listener::DuplexListener;
+///
+/// // Bind to TCP
+/// let tcp_listener = DuplexListener::bind("localhost:8080").await.unwrap();
+///
+/// // Bind to Unix Domain Socket (on Unix systems)
+/// # #[cfg(unix)] {
+/// let uds_listener = DuplexListener::bind("unix:/tmp/app.sock").await.unwrap();
+/// # }
+/// # });
+/// ```
+///
+/// # Platform Support
+///
+/// - `Tcp` variant is available on all platforms
+/// - `Uds` variant is only available on Unix-like systems
 pub enum DuplexListener {
+    /// A TCP listener for network connections
     Tcp(tokio::net::TcpListener),
+    /// A Unix Domain Socket listener for local inter-process communication
     #[cfg(unix)]
     Uds(tokio::net::UnixListener),
 }
 
+/// An address that can represent either a TCP socket address or a Unix Domain Socket address.
+///
+/// This enum is used to represent the local and remote addresses for connections
+/// accepted by [`DuplexListener`]. It automatically implements cleanup for UDS
+/// socket files when the `remove-on-drop` feature is enabled.
+///
+/// # Examples
+///
+/// ```rust
+/// use axum_listener::listener::DuplexAddr;
+/// use std::str::FromStr;
+///
+/// // Parse a TCP address
+/// let tcp_addr = DuplexAddr::from_str("127.0.0.1:8080").unwrap();
+///
+/// // Parse a UDS address (on Unix systems)
+/// # #[cfg(unix)] {
+/// let uds_addr = DuplexAddr::from_str("unix:/tmp/app.sock").unwrap();
+/// # }
+/// ```
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub enum DuplexAddr {
+    /// A TCP socket address (IPv4 or IPv6)
     Tcp(core::net::SocketAddr),
+    /// A Unix Domain Socket address
     #[cfg(unix)]
     Uds(tokio::net::unix::SocketAddr),
 }
@@ -84,7 +133,33 @@ impl core::str::FromStr for DuplexAddr {
     }
 }
 
+/// A trait for types that can be converted to a [`DuplexAddr`].
+///
+/// This trait enables convenient address binding by allowing various types
+/// to be converted to the unified [`DuplexAddr`] type. It's implemented for
+/// common address types including strings, socket addresses, and paths.
+///
+/// # Examples
+///
+/// ```rust
+/// use axum_listener::listener::{ToDuplexAddr, DuplexAddr};
+/// use std::net::SocketAddr;
+///
+/// // String addresses
+/// let addr1 = "127.0.0.1:8080".to_duplex_addr().unwrap();
+/// let addr2 = "unix:/tmp/app.sock".to_duplex_addr().unwrap();
+///
+/// // Socket address
+/// let socket_addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+/// let addr3 = socket_addr.to_duplex_addr().unwrap();
+/// ```
 pub trait ToDuplexAddr {
+    /// Convert this type to a [`DuplexAddr`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`std::io::Error`] if the address format is invalid or
+    /// if Unix Domain Sockets are not supported on the current platform.
     fn to_duplex_addr(&self) -> Result<DuplexAddr, std::io::Error>;
 }
 
@@ -142,6 +217,44 @@ impl ToDuplexAddr for std::path::PathBuf {
 }
 
 impl DuplexListener {
+    /// Creates a new [`DuplexListener`] bound to the specified address.
+    ///
+    /// This method accepts any type that implements [`ToDuplexAddr`], allowing
+    /// for flexible address specification. The listener type (TCP or UDS) is
+    /// automatically determined based on the address format.
+    ///
+    /// # Arguments
+    ///
+    /// * `address` - An address that can be converted to [`DuplexAddr`]
+    ///
+    /// # Returns
+    ///
+    /// Returns a [`DuplexListener`] bound to the specified address, or an error
+    /// if binding fails.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # tokio_test::block_on(async {
+    /// use axum_listener::listener::DuplexListener;
+    ///
+    /// // Bind to TCP address
+    /// let listener = DuplexListener::bind("localhost:8080").await.unwrap();
+    ///
+    /// // Bind to UDS address (Unix only)
+    /// # #[cfg(unix)] {
+    /// let listener = DuplexListener::bind("unix:/tmp/app.sock").await.unwrap();
+    /// # }
+    /// # });
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// This method can fail if:
+    /// - The address format is invalid
+    /// - The address is already in use
+    /// - Permission is denied for the requested address
+    /// - Unix Domain Sockets are not supported on the current platform
     pub async fn bind<A: ToDuplexAddr>(address: A) -> Result<Self, std::io::Error> {
         let address = address.to_duplex_addr()?;
         match address {
@@ -168,6 +281,34 @@ impl DuplexListener {
         }
     }
 
+    /// Accepts a new incoming connection from this listener.
+    ///
+    /// This method will wait for a connection to be established and return
+    /// a stream and address representing the connection.
+    ///
+    /// # Returns
+    ///
+    /// Returns a tuple containing:
+    /// - [`DuplexStream`]: The stream for communicating with the client
+    /// - [`DuplexAddr`]: The address of the connected client
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # tokio_test::block_on(async {
+    /// use axum_listener::listener::DuplexListener;
+    ///
+    /// let listener = DuplexListener::bind("localhost:8080").await.unwrap();
+    ///
+    /// // Accept a connection
+    /// let (stream, addr) = listener.accept().await.unwrap();
+    /// println!("Accepted connection from: {:?}", addr);
+    /// # });
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// This method can fail if there's an I/O error while accepting the connection.
     pub async fn accept(&self) -> Result<(DuplexStream, DuplexAddr), std::io::Error> {
         match self {
             DuplexListener::Tcp(listener) => {
@@ -203,8 +344,30 @@ impl DuplexListener {
     }
 }
 
+/// A stream that can be either a TCP stream or a Unix Domain Socket stream.
+///
+/// This enum provides a unified interface for both TCP and UDS connections,
+/// implementing the necessary async I/O traits to work seamlessly with Axum
+/// and other async frameworks.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # tokio_test::block_on(async {
+/// use axum_listener::listener::DuplexListener;
+///
+/// let listener = DuplexListener::bind("localhost:8080").await.unwrap();
+/// let (stream, _addr) = listener.accept().await.unwrap();
+///
+/// // The stream can be used with Axum or any other async framework
+/// // that works with tokio's AsyncRead + AsyncWrite traits
+/// println!("Accepted connection from: {:?}", _addr);
+/// # });
+/// ```
 pub enum DuplexStream {
+    /// A TCP stream for network connections
     Tcp(tokio::net::TcpStream),
+    /// A Unix Domain Socket stream for local inter-process communication
     #[cfg(unix)]
     Uds(tokio::net::UnixStream),
 }
