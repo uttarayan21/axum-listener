@@ -69,3 +69,7 @@
 //! - The crate gracefully handles platform differences with conditional compilation
 pub mod listener;
 pub mod multi;
+#[doc(inline)]
+pub use listener::*;
+#[doc(inline)]
+pub use multi::*;
