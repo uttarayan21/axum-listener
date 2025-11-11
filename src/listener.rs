@@ -7,20 +7,20 @@ use tokio::net::UnixListener;
 ///
 /// This enum allows you to create a single listener type that can handle both TCP and UDS
 /// connections transparently. The specific variant is determined at runtime based on the
-/// address format provided to [`DuplexListener::bind`].
+/// address format provided to [`DualListener::bind`].
 ///
 /// # Examples
 ///
 /// ```rust,no_run
 /// # tokio_test::block_on(async {
-/// use axum_listener::listener::DuplexListener;
+/// use axum_listener::listener::DualListener;
 ///
 /// // Bind to TCP
-/// let tcp_listener = DuplexListener::bind("localhost:8080").await.unwrap();
+/// let tcp_listener = DualListener::bind("localhost:8080").await.unwrap();
 ///
 /// // Bind to Unix Domain Socket (on Unix systems)
 /// # #[cfg(unix)] {
-/// let uds_listener = DuplexListener::bind("unix:/tmp/app.sock").await.unwrap();
+/// let uds_listener = DualListener::bind("unix:/tmp/app.sock").await.unwrap();
 /// # }
 /// # });
 /// ```
@@ -29,7 +29,7 @@ use tokio::net::UnixListener;
 ///
 /// - `Tcp` variant is available on all platforms
 /// - `Uds` variant is only available on Unix-like systems
-pub enum DuplexListener {
+pub enum DualListener {
     /// A TCP listener for network connections
     Tcp(tokio::net::TcpListener),
     /// A Unix Domain Socket listener for local inter-process communication
@@ -40,26 +40,26 @@ pub enum DuplexListener {
 /// An address that can represent either a TCP socket address or a Unix Domain Socket address.
 ///
 /// This enum is used to represent the local and remote addresses for connections
-/// accepted by [`DuplexListener`]. It automatically implements cleanup for UDS
+/// accepted by [`DualListener`]. It automatically implements cleanup for UDS
 /// socket files when the `remove-on-drop` feature is enabled.
 ///
 /// # Examples
 ///
 /// ```rust
-/// use axum_listener::listener::DuplexAddr;
+/// use axum_listener::listener::DualAddr;
 /// use std::str::FromStr;
 ///
 /// // Parse a TCP address
-/// let tcp_addr = DuplexAddr::from_str("127.0.0.1:8080").unwrap();
+/// let tcp_addr = DualAddr::from_str("127.0.0.1:8080").unwrap();
 ///
 /// // Parse a UDS address (on Unix systems)
 /// # #[cfg(unix)] {
-/// let uds_addr = DuplexAddr::from_str("unix:/tmp/app.sock").unwrap();
+/// let uds_addr = DualAddr::from_str("unix:/tmp/app.sock").unwrap();
 /// # }
 /// ```
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
-pub enum DuplexAddr {
+pub enum DualAddr {
     /// A TCP socket address (IPv4 or IPv6)
     Tcp(core::net::SocketAddr),
     /// A Unix Domain Socket address
@@ -68,10 +68,10 @@ pub enum DuplexAddr {
 }
 
 #[cfg(feature = "remove-on-drop")]
-impl Drop for DuplexAddr {
+impl Drop for DualAddr {
     fn drop(&mut self) {
         #[cfg(unix)]
-        if let DuplexAddr::Uds(addr) = self {
+        if let DualAddr::Uds(addr) = self {
             if let Some(path) = addr.as_pathname() {
                 let _ = std::fs::remove_file(path);
             }
@@ -79,20 +79,20 @@ impl Drop for DuplexAddr {
     }
 }
 
-impl From<core::net::SocketAddr> for DuplexAddr {
+impl From<core::net::SocketAddr> for DualAddr {
     fn from(addr: core::net::SocketAddr) -> Self {
-        DuplexAddr::Tcp(addr)
+        DualAddr::Tcp(addr)
     }
 }
 
 #[cfg(unix)]
-impl From<tokio::net::unix::SocketAddr> for DuplexAddr {
+impl From<tokio::net::unix::SocketAddr> for DualAddr {
     fn from(addr: tokio::net::unix::SocketAddr) -> Self {
-        DuplexAddr::Uds(addr)
+        DualAddr::Uds(addr)
     }
 }
 
-impl core::str::FromStr for DuplexAddr {
+impl core::str::FromStr for DualAddr {
     type Err = std::io::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -105,7 +105,7 @@ impl core::str::FromStr for DuplexAddr {
             {
                 let path = s.trim_start_matches("unix:");
                 let addr = From::from(std::os::unix::net::SocketAddr::from_pathname(path)?);
-                Ok(DuplexAddr::Uds(addr))
+                Ok(DualAddr::Uds(addr))
             }
             #[cfg(not(unix))]
             {
@@ -118,7 +118,7 @@ impl core::str::FromStr for DuplexAddr {
             let addr = s.to_socket_addrs()?.next().ok_or_else(|| {
                 std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid TCP address")
             })?;
-            Ok(DuplexAddr::Tcp(addr))
+            Ok(DualAddr::Tcp(addr))
         } else if unix_like && !has_uds {
             Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
@@ -133,117 +133,117 @@ impl core::str::FromStr for DuplexAddr {
     }
 }
 
-/// A trait for types that can be converted to a [`DuplexAddr`].
+/// A trait for types that can be converted to a [`DualAddr`].
 ///
 /// This trait enables convenient address binding by allowing various types
-/// to be converted to the unified [`DuplexAddr`] type. It's implemented for
+/// to be converted to the unified [`DualAddr`] type. It's implemented for
 /// common address types including strings, socket addresses, and paths.
 ///
 /// # Examples
 ///
 /// ```rust
-/// use axum_listener::listener::{ToDuplexAddr, DuplexAddr};
+/// use axum_listener::listener::{ToDualAddr, DualAddr};
 /// use std::net::SocketAddr;
 ///
 /// // String addresses
-/// let addr1 = "127.0.0.1:8080".to_duplex_addr().unwrap();
-/// let addr2 = "unix:/tmp/app.sock".to_duplex_addr().unwrap();
+/// let addr1 = "127.0.0.1:8080".to_dual_addr().unwrap();
+/// let addr2 = "unix:/tmp/app.sock".to_dual_addr().unwrap();
 ///
 /// // Socket address
 /// let socket_addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
-/// let addr3 = socket_addr.to_duplex_addr().unwrap();
+/// let addr3 = socket_addr.to_dual_addr().unwrap();
 /// ```
-pub trait ToDuplexAddr {
-    /// Convert this type to a [`DuplexAddr`].
+pub trait ToDualAddr {
+    /// Convert this type to a [`DualAddr`].
     ///
     /// # Errors
     ///
     /// Returns an [`std::io::Error`] if the address format is invalid or
     /// if Unix Domain Sockets are not supported on the current platform.
-    fn to_duplex_addr(&self) -> Result<DuplexAddr, std::io::Error>;
+    fn to_dual_addr(&self) -> Result<DualAddr, std::io::Error>;
 }
 
-impl ToDuplexAddr for &str {
-    fn to_duplex_addr(&self) -> Result<DuplexAddr, std::io::Error> {
+impl ToDualAddr for &str {
+    fn to_dual_addr(&self) -> Result<DualAddr, std::io::Error> {
         self.parse()
     }
 }
 
-impl ToDuplexAddr for String {
-    fn to_duplex_addr(&self) -> Result<DuplexAddr, std::io::Error> {
-        self.as_str().to_duplex_addr()
+impl ToDualAddr for String {
+    fn to_dual_addr(&self) -> Result<DualAddr, std::io::Error> {
+        self.as_str().to_dual_addr()
     }
 }
 
-impl ToDuplexAddr for core::net::SocketAddr {
-    fn to_duplex_addr(&self) -> Result<DuplexAddr, std::io::Error> {
-        Ok(DuplexAddr::Tcp(*self))
+impl ToDualAddr for core::net::SocketAddr {
+    fn to_dual_addr(&self) -> Result<DualAddr, std::io::Error> {
+        Ok(DualAddr::Tcp(*self))
     }
 }
 
 #[cfg(unix)]
-impl ToDuplexAddr for tokio::net::unix::SocketAddr {
-    fn to_duplex_addr(&self) -> Result<DuplexAddr, std::io::Error> {
-        Ok(DuplexAddr::Uds(self.clone()))
+impl ToDualAddr for tokio::net::unix::SocketAddr {
+    fn to_dual_addr(&self) -> Result<DualAddr, std::io::Error> {
+        Ok(DualAddr::Uds(self.clone()))
     }
 }
 
-impl ToDuplexAddr for DuplexAddr {
-    fn to_duplex_addr(&self) -> Result<DuplexAddr, std::io::Error> {
+impl ToDualAddr for DualAddr {
+    fn to_dual_addr(&self) -> Result<DualAddr, std::io::Error> {
         Ok(self.clone())
     }
 }
 
-impl ToDuplexAddr for &DuplexAddr {
-    fn to_duplex_addr(&self) -> Result<DuplexAddr, std::io::Error> {
+impl ToDualAddr for &DualAddr {
+    fn to_dual_addr(&self) -> Result<DualAddr, std::io::Error> {
         Ok((*self).clone())
     }
 }
 
 #[cfg(unix)]
-impl ToDuplexAddr for &std::path::Path {
-    fn to_duplex_addr(&self) -> Result<DuplexAddr, std::io::Error> {
-        Ok(DuplexAddr::Uds(From::from(
+impl ToDualAddr for &std::path::Path {
+    fn to_dual_addr(&self) -> Result<DualAddr, std::io::Error> {
+        Ok(DualAddr::Uds(From::from(
             std::os::unix::net::SocketAddr::from_pathname(self)?,
         )))
     }
 }
 
 #[cfg(unix)]
-impl ToDuplexAddr for std::path::PathBuf {
-    fn to_duplex_addr(&self) -> Result<DuplexAddr, std::io::Error> {
-        self.as_path().to_duplex_addr()
+impl ToDualAddr for std::path::PathBuf {
+    fn to_dual_addr(&self) -> Result<DualAddr, std::io::Error> {
+        self.as_path().to_dual_addr()
     }
 }
 
-impl DuplexListener {
-    /// Creates a new [`DuplexListener`] bound to the specified address.
+impl DualListener {
+    /// Creates a new [`DualListener`] bound to the specified address.
     ///
-    /// This method accepts any type that implements [`ToDuplexAddr`], allowing
+    /// This method accepts any type that implements [`ToDualAddr`], allowing
     /// for flexible address specification. The listener type (TCP or UDS) is
     /// automatically determined based on the address format.
     ///
     /// # Arguments
     ///
-    /// * `address` - An address that can be converted to [`DuplexAddr`]
+    /// * `address` - An address that can be converted to [`DualAddr`]
     ///
     /// # Returns
     ///
-    /// Returns a [`DuplexListener`] bound to the specified address, or an error
+    /// Returns a [`DualListener`] bound to the specified address, or an error
     /// if binding fails.
     ///
     /// # Examples
     ///
     /// ```rust,no_run
     /// # tokio_test::block_on(async {
-    /// use axum_listener::listener::DuplexListener;
+    /// use axum_listener::listener::DualListener;
     ///
     /// // Bind to TCP address
-    /// let listener = DuplexListener::bind("localhost:8080").await.unwrap();
+    /// let listener = DualListener::bind("localhost:8080").await.unwrap();
     ///
     /// // Bind to UDS address (Unix only)
     /// # #[cfg(unix)] {
-    /// let listener = DuplexListener::bind("unix:/tmp/app.sock").await.unwrap();
+    /// let listener = DualListener::bind("unix:/tmp/app.sock").await.unwrap();
     /// # }
     /// # });
     /// ```
@@ -255,15 +255,15 @@ impl DuplexListener {
     /// - The address is already in use
     /// - Permission is denied for the requested address
     /// - Unix Domain Sockets are not supported on the current platform
-    pub async fn bind<A: ToDuplexAddr>(address: A) -> Result<Self, std::io::Error> {
-        let address = address.to_duplex_addr()?;
+    pub async fn bind<A: ToDualAddr>(address: A) -> Result<Self, std::io::Error> {
+        let address = address.to_dual_addr()?;
         match address {
-            DuplexAddr::Tcp(addr) => {
+            DualAddr::Tcp(addr) => {
                 let listener = tokio::net::TcpListener::bind(addr).await?;
-                Ok(DuplexListener::Tcp(listener))
+                Ok(DualListener::Tcp(listener))
             }
             #[cfg(unix)]
-            DuplexAddr::Uds(ref addr) => {
+            DualAddr::Uds(ref addr) => {
                 let path = addr.as_pathname().ok_or_else(|| {
                     std::io::Error::new(
                         std::io::ErrorKind::InvalidInput,
@@ -271,10 +271,10 @@ impl DuplexListener {
                     )
                 })?;
                 let listener = UnixListener::bind(path)?;
-                Ok(DuplexListener::Uds(listener))
+                Ok(DualListener::Uds(listener))
             }
             #[cfg(not(unix))]
-            DuplexAddr::Uds(_) => Err(std::io::Error::new(
+            DualAddr::Uds(_) => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 "Unix domain sockets are not supported on this platform",
             )),
@@ -289,16 +289,16 @@ impl DuplexListener {
     /// # Returns
     ///
     /// Returns a tuple containing:
-    /// - [`DuplexStream`]: The stream for communicating with the client
-    /// - [`DuplexAddr`]: The address of the connected client
+    /// - [`DualStream`]: The stream for communicating with the client
+    /// - [`DualAddr`]: The address of the connected client
     ///
     /// # Examples
     ///
     /// ```rust,no_run
     /// # tokio_test::block_on(async {
-    /// use axum_listener::listener::DuplexListener;
+    /// use axum_listener::listener::DualListener;
     ///
-    /// let listener = DuplexListener::bind("localhost:8080").await.unwrap();
+    /// let listener = DualListener::bind("localhost:8080").await.unwrap();
     ///
     /// // Accept a connection
     /// let (stream, addr) = listener.accept().await.unwrap();
@@ -309,35 +309,35 @@ impl DuplexListener {
     /// # Errors
     ///
     /// This method can fail if there's an I/O error while accepting the connection.
-    pub async fn accept(&self) -> Result<(DuplexStream, DuplexAddr), std::io::Error> {
+    pub async fn accept(&self) -> Result<(DualStream, DualAddr), std::io::Error> {
         match self {
-            DuplexListener::Tcp(listener) => {
+            DualListener::Tcp(listener) => {
                 let (stream, addr) = listener.accept().await?;
-                Ok((DuplexStream::Tcp(stream), DuplexAddr::Tcp(addr)))
+                Ok((DualStream::Tcp(stream), DualAddr::Tcp(addr)))
             }
             #[cfg(unix)]
-            DuplexListener::Uds(listener) => {
+            DualListener::Uds(listener) => {
                 let (stream, addr) = listener.accept().await?;
-                Ok((DuplexStream::Uds(stream), DuplexAddr::Uds(addr)))
+                Ok((DualStream::Uds(stream), DualAddr::Uds(addr)))
             }
         }
     }
 
     pub(crate) fn _accept(
         &self,
-    ) -> impl core::future::Future<Output = Result<(DuplexStream, DuplexAddr), std::io::Error>>
+    ) -> impl core::future::Future<Output = Result<(DualStream, DualAddr), std::io::Error>>
            + Unpin
            + use<'_> {
         Box::pin(async move {
             match self {
-                DuplexListener::Tcp(listener) => {
+                DualListener::Tcp(listener) => {
                     let (stream, addr) = listener.accept().await?;
-                    Ok((DuplexStream::Tcp(stream), DuplexAddr::Tcp(addr)))
+                    Ok((DualStream::Tcp(stream), DualAddr::Tcp(addr)))
                 }
                 #[cfg(unix)]
-                DuplexListener::Uds(listener) => {
+                DualListener::Uds(listener) => {
                     let (stream, addr) = listener.accept().await?;
-                    Ok((DuplexStream::Uds(stream), DuplexAddr::Uds(addr)))
+                    Ok((DualStream::Uds(stream), DualAddr::Uds(addr)))
                 }
             }
         })
@@ -354,9 +354,9 @@ impl DuplexListener {
 ///
 /// ```rust,no_run
 /// # tokio_test::block_on(async {
-/// use axum_listener::listener::DuplexListener;
+/// use axum_listener::listener::DualListener;
 ///
-/// let listener = DuplexListener::bind("localhost:8080").await.unwrap();
+/// let listener = DualListener::bind("localhost:8080").await.unwrap();
 /// let (stream, _addr) = listener.accept().await.unwrap();
 ///
 /// // The stream can be used with Axum or any other async framework
@@ -364,7 +364,7 @@ impl DuplexListener {
 /// println!("Accepted connection from: {:?}", _addr);
 /// # });
 /// ```
-pub enum DuplexStream {
+pub enum DualStream {
     /// A TCP stream for network connections
     Tcp(tokio::net::TcpStream),
     /// A Unix Domain Socket stream for local inter-process communication
@@ -372,43 +372,43 @@ pub enum DuplexStream {
     Uds(tokio::net::UnixStream),
 }
 
-impl From<tokio::net::TcpStream> for DuplexStream {
+impl From<tokio::net::TcpStream> for DualStream {
     fn from(stream: tokio::net::TcpStream) -> Self {
-        DuplexStream::Tcp(stream)
+        DualStream::Tcp(stream)
     }
 }
 
 #[cfg(unix)]
-impl From<tokio::net::UnixStream> for DuplexStream {
+impl From<tokio::net::UnixStream> for DualStream {
     fn from(stream: tokio::net::UnixStream) -> Self {
-        DuplexStream::Uds(stream)
+        DualStream::Uds(stream)
     }
 }
 
-impl tokio::io::AsyncRead for DuplexStream {
+impl tokio::io::AsyncRead for DualStream {
     fn poll_read(
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
         match self.get_mut() {
-            DuplexStream::Tcp(stream) => std::pin::Pin::new(stream).poll_read(cx, buf),
+            DualStream::Tcp(stream) => std::pin::Pin::new(stream).poll_read(cx, buf),
             #[cfg(unix)]
-            DuplexStream::Uds(stream) => std::pin::Pin::new(stream).poll_read(cx, buf),
+            DualStream::Uds(stream) => std::pin::Pin::new(stream).poll_read(cx, buf),
         }
     }
 }
 
-impl tokio::io::AsyncWrite for DuplexStream {
+impl tokio::io::AsyncWrite for DualStream {
     fn poll_write(
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
         buf: &[u8],
     ) -> std::task::Poll<std::io::Result<usize>> {
         match self.get_mut() {
-            DuplexStream::Tcp(stream) => std::pin::Pin::new(stream).poll_write(cx, buf),
+            DualStream::Tcp(stream) => std::pin::Pin::new(stream).poll_write(cx, buf),
             #[cfg(unix)]
-            DuplexStream::Uds(stream) => std::pin::Pin::new(stream).poll_write(cx, buf),
+            DualStream::Uds(stream) => std::pin::Pin::new(stream).poll_write(cx, buf),
         }
     }
 
@@ -417,9 +417,9 @@ impl tokio::io::AsyncWrite for DuplexStream {
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
         match self.get_mut() {
-            DuplexStream::Tcp(stream) => std::pin::Pin::new(stream).poll_flush(cx),
+            DualStream::Tcp(stream) => std::pin::Pin::new(stream).poll_flush(cx),
             #[cfg(unix)]
-            DuplexStream::Uds(stream) => std::pin::Pin::new(stream).poll_flush(cx),
+            DualStream::Uds(stream) => std::pin::Pin::new(stream).poll_flush(cx),
         }
     }
 
@@ -428,35 +428,35 @@ impl tokio::io::AsyncWrite for DuplexStream {
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
         match self.get_mut() {
-            DuplexStream::Tcp(stream) => std::pin::Pin::new(stream).poll_shutdown(cx),
+            DualStream::Tcp(stream) => std::pin::Pin::new(stream).poll_shutdown(cx),
             #[cfg(unix)]
-            DuplexStream::Uds(stream) => std::pin::Pin::new(stream).poll_shutdown(cx),
+            DualStream::Uds(stream) => std::pin::Pin::new(stream).poll_shutdown(cx),
         }
     }
 }
 
-impl axum::serve::Listener for DuplexListener {
-    type Io = DuplexStream;
-    type Addr = DuplexAddr;
+impl axum::serve::Listener for DualListener {
+    type Io = DualStream;
+    type Addr = DualAddr;
     async fn accept(&mut self) -> (Self::Io, Self::Addr) {
         match self {
-            DuplexListener::Tcp(listener) => {
+            DualListener::Tcp(listener) => {
                 let (io, addr) = Listener::accept(listener).await;
-                (DuplexStream::Tcp(io), DuplexAddr::Tcp(addr))
+                (DualStream::Tcp(io), DualAddr::Tcp(addr))
             }
             #[cfg(unix)]
-            DuplexListener::Uds(listener) => {
+            DualListener::Uds(listener) => {
                 let (io, addr) = Listener::accept(listener).await;
-                (DuplexStream::Uds(io), DuplexAddr::Uds(addr))
+                (DualStream::Uds(io), DualAddr::Uds(addr))
             }
         }
     }
 
     fn local_addr(&self) -> Result<Self::Addr, std::io::Error> {
         match self {
-            DuplexListener::Tcp(listener) => Listener::local_addr(listener).map(DuplexAddr::Tcp),
+            DualListener::Tcp(listener) => Listener::local_addr(listener).map(DualAddr::Tcp),
             #[cfg(unix)]
-            DuplexListener::Uds(listener) => Listener::local_addr(listener).map(DuplexAddr::Uds),
+            DualListener::Uds(listener) => Listener::local_addr(listener).map(DualAddr::Uds),
         }
     }
 }
@@ -466,9 +466,9 @@ mod tests {
     use super::*;
     #[tokio::test]
     async fn test_tcp_bind() {
-        let listener = DuplexListener::bind("localhost:8080").await;
+        let listener = DualListener::bind("localhost:8080").await;
         assert!(listener.is_ok());
-        if let DuplexListener::Tcp(tcp_listener) = listener.unwrap() {
+        if let DualListener::Tcp(tcp_listener) = listener.unwrap() {
             let addr = tcp_listener.local_addr().unwrap();
             assert_eq!(addr.port(), 8080);
         } else {
@@ -480,9 +480,9 @@ mod tests {
     async fn test_uds_bind() {
         #[cfg(unix)]
         {
-            let listener = DuplexListener::bind("/tmp/test.sock").await;
+            let listener = DualListener::bind("/tmp/test.sock").await;
             assert!(listener.is_ok());
-            if let DuplexListener::Uds(uds_listener) = listener.unwrap() {
+            if let DualListener::Uds(uds_listener) = listener.unwrap() {
                 let addr = uds_listener.local_addr().unwrap();
                 assert_eq!(addr.as_pathname().unwrap(), "/tmp/test.sock");
             } else {

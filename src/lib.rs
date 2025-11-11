@@ -5,7 +5,7 @@
 //!
 //! ## Features
 //!
-//! - **DuplexListener**: A unified listener that can bind to either TCP or Unix Domain Socket addresses
+//! - **DualListener**: A unified listener that can bind to either TCP or Unix Domain Socket addresses
 //! - **MultiListener**: A listener that can simultaneously accept connections from multiple underlying listeners
 //! - **Cross-platform support**: Works on Unix-like systems with UDS support and all platforms for TCP
 //! - **Axum integration**: Implements the `axum::serve::Listener` trait for seamless integration
@@ -18,22 +18,22 @@
 //!
 //! ## Quick Start
 //!
-//! ### Using DuplexListener for a single address
+//! ### Using DualListener for a single address
 //!
 //! ```rust,no_run
 //! # tokio_test::block_on(async {
 //! use axum::{Router, routing::get};
-//! use axum_listener::listener::DuplexListener;
+//! use axum_listener::listener::DualListener;
 //!
 //! let router = Router::new().route("/", get(|| async { "Hello, World!" }));
 //!
 //! // Bind to a TCP address
-//! let listener = DuplexListener::bind("localhost:8080").await.unwrap();
+//! let listener = DualListener::bind("localhost:8080").await.unwrap();
 //! axum::serve(listener, router.clone()).await.unwrap();
 //!
 //! // Or bind to a Unix Domain Socket (on Unix systems)
 //! # #[cfg(unix)] {
-//! let listener = DuplexListener::bind("unix:/tmp/app.sock").await.unwrap();
+//! let listener = DualListener::bind("unix:/tmp/app.sock").await.unwrap();
 //! axum::serve(listener, router).await.unwrap();
 //! # }
 //! # });

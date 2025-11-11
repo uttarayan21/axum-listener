@@ -1,4 +1,4 @@
-use crate::listener::{DuplexAddr, DuplexListener, DuplexStream, ToDuplexAddr};
+use crate::listener::{DualAddr, DualListener, DualStream, ToDualAddr};
 use axum::serve::Listener;
 
 /// A listener that can accept connections on multiple underlying listeners simultaneously.
@@ -41,7 +41,7 @@ use axum::serve::Listener;
 /// ```
 pub struct MultiListener {
     /// The underlying listeners that this multi-listener manages
-    pub listeners: Vec<DuplexListener>,
+    pub listeners: Vec<DualListener>,
 }
 
 /// An address collection representing the local addresses of a [`MultiListener`].
@@ -66,7 +66,7 @@ pub struct MultiListener {
 #[derive(Debug, Clone)]
 pub struct MultiAddr {
     /// The collection of addresses that the multi-listener is bound to
-    pub addrs: Vec<DuplexAddr>,
+    pub addrs: Vec<DualAddr>,
 }
 
 /// A stream collection for multi-listener connections.
@@ -75,8 +75,8 @@ pub struct MultiAddr {
 /// for potential future extensions where multiple streams might need to be
 /// handled together.
 pub struct MultiStream {
-    /// A collection of duplex streams
-    pub streams: Vec<DuplexStream>,
+    /// A collection of dual streams
+    pub streams: Vec<DualStream>,
 }
 
 impl MultiListener {
@@ -88,7 +88,7 @@ impl MultiListener {
     ///
     /// # Arguments
     ///
-    /// * `addresses` - An iterable collection of addresses that implement [`ToDuplexAddr`]
+    /// * `addresses` - An iterable collection of addresses that implement [`ToDualAddr`]
     ///
     /// # Returns
     ///
@@ -127,10 +127,10 @@ impl MultiListener {
     /// - Permission is denied for any requested address
     /// - Unix Domain Sockets are not supported on the current platform
     /// - The provided iterator is empty (no addresses to bind to)
-    pub async fn bind<I: IntoIterator<Item = A>, A: ToDuplexAddr>(
+    pub async fn bind<I: IntoIterator<Item = A>, A: ToDualAddr>(
         addresses: I,
     ) -> Result<Self, std::io::Error> {
-        let listeners = futures::future::join_all(addresses.into_iter().map(DuplexListener::bind))
+        let listeners = futures::future::join_all(addresses.into_iter().map(DualListener::bind))
             .await
             .into_iter()
             .collect::<Result<Vec<_>, _>>()?;
@@ -147,8 +147,8 @@ impl MultiListener {
     /// # Returns
     ///
     /// Returns a tuple containing:
-    /// - [`DuplexStream`]: The stream for communicating with the client
-    /// - [`DuplexAddr`]: The address of the connected client
+    /// - [`DualStream`]: The stream for communicating with the client
+    /// - [`DualAddr`]: The address of the connected client
     ///
     /// # Examples
     ///
@@ -169,7 +169,7 @@ impl MultiListener {
     ///
     /// This method can fail if there's an I/O error while accepting a connection
     /// from any of the underlying listeners.
-    pub async fn accept(&self) -> Result<(DuplexStream, DuplexAddr), std::io::Error> {
+    pub async fn accept(&self) -> Result<(DualStream, DualAddr), std::io::Error> {
         let (out, idx, _rest) =
             futures::future::select_all(self.listeners.iter().map(|listener| listener._accept()))
                 .await;
@@ -179,7 +179,7 @@ impl MultiListener {
 }
 
 impl axum::serve::Listener for MultiListener {
-    type Io = DuplexStream;
+    type Io = DualStream;
     type Addr = MultiAddr;
 
     async fn accept(&mut self) -> (Self::Io, Self::Addr) {
@@ -187,14 +187,14 @@ impl axum::serve::Listener for MultiListener {
             futures::future::select_all(self.listeners.iter_mut().map(|listener| {
                 Box::pin(async move {
                     match listener {
-                        DuplexListener::Tcp(ref mut listener) => {
+                        DualListener::Tcp(ref mut listener) => {
                             let (io, addr) = Listener::accept(listener).await;
-                            (DuplexStream::Tcp(io), DuplexAddr::Tcp(addr))
+                            (DualStream::Tcp(io), DualAddr::Tcp(addr))
                         }
                         #[cfg(unix)]
-                        DuplexListener::Uds(ref mut listener) => {
+                        DualListener::Uds(ref mut listener) => {
                             let (io, addr) = Listener::accept(listener).await;
-                            (DuplexStream::Uds(io), DuplexAddr::Uds(addr))
+                            (DualStream::Uds(io), DualAddr::Uds(addr))
                         }
                     }
                 })
