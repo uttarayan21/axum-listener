@@ -67,9 +67,9 @@
 //! - TCP listeners work on all platforms
 //! - Unix Domain Socket listeners are only available on Unix-like systems (Linux, macOS, BSD, etc.)
 //! - The crate gracefully handles platform differences with conditional compilation
-pub mod listener;
+pub mod dual;
 pub mod multi;
 #[doc(inline)]
-pub use listener::*;
+pub use dual::*;
 #[doc(inline)]
 pub use multi::*;

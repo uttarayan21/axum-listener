@@ -1,4 +1,4 @@
-use crate::listener::{DualAddr, DualListener, DualStream, ToDualAddr};
+use crate::dual::{DualAddr, DualListener, DualStream, ToDualAddr};
 
 /// A listener that can accept connections on multiple underlying listeners simultaneously.
 ///
@@ -132,6 +132,7 @@ impl MultiListener {
         let listeners = futures::future::join_all(addresses.into_iter().map(DualListener::bind))
             .await
             .into_iter()
+            .map(|f| dbg!(f))
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(MultiListener { listeners })
@@ -203,3 +204,21 @@ impl axum::serve::Listener for MultiListener {
             .map(|addrs| MultiAddr { addrs })
     }
 }
+
+#[cfg(feature = "tokio")]
+const _: () = {
+    use super::MultiAddr;
+    use axum::extract::connect_info::Connected;
+    impl Connected<MultiAddr> for MultiAddr {
+        fn connect_info(remote_addr: MultiAddr) -> Self {
+            remote_addr
+        }
+    }
+    use axum::serve;
+
+    impl Connected<serve::IncomingStream<'_, MultiListener>> for MultiAddr {
+        fn connect_info(stream: serve::IncomingStream<'_, MultiListener>) -> Self {
+            stream.remote_addr().clone()
+        }
+    }
+};

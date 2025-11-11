@@ -29,6 +29,7 @@ use tokio::net::UnixListener;
 ///
 /// - `Tcp` variant is available on all platforms
 /// - `Uds` variant is only available on Unix-like systems
+#[derive(Debug)]
 pub enum DualListener {
     /// A TCP listener for network connections
     Tcp(tokio::net::TcpListener),
@@ -65,18 +66,6 @@ pub enum DualAddr {
     /// A Unix Domain Socket address
     #[cfg(unix)]
     Uds(tokio::net::unix::SocketAddr),
-}
-
-#[cfg(feature = "remove-on-drop")]
-impl Drop for DualAddr {
-    fn drop(&mut self) {
-        #[cfg(unix)]
-        if let DualAddr::Uds(addr) = self {
-            if let Some(path) = addr.as_pathname() {
-                let _ = std::fs::remove_file(path);
-            }
-        }
-    }
 }
 
 impl From<core::net::SocketAddr> for DualAddr {
@@ -512,3 +501,21 @@ mod tests {
         }
     }
 }
+
+#[cfg(feature = "tokio")]
+const _: () = {
+    use super::DualAddr;
+    use axum::extract::connect_info::Connected;
+    impl Connected<DualAddr> for DualAddr {
+        fn connect_info(remote_addr: DualAddr) -> Self {
+            remote_addr
+        }
+    }
+    use axum::serve;
+
+    impl Connected<serve::IncomingStream<'_, DualListener>> for DualAddr {
+        fn connect_info(stream: serve::IncomingStream<'_, DualListener>) -> Self {
+            stream.remote_addr().clone()
+        }
+    }
+};

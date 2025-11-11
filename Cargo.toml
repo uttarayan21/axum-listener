@@ -12,11 +12,16 @@ tokio = { version = "1", default-features = false, features = ["net"] }
 tracing = "0.1.41"
 
 [dev-dependencies]
-axum = { version = "0.8" }
+axum = { version = "0.8", features = ["tokio"] }
+bytes = "1.10.1"
+chrono = { version = "0.4.42", features = ["serde"] }
+serde_json = "1.0.145"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 tokio-test = "0.4.4"
+tracing-subscriber = "0.3.20"
 
 [features]
-default = ["http1", "remove-on-drop"]
-remove-on-drop = []                   # Removes the uds socket file on drop
+default = ["http1", "tokio"]
 http1 = ["axum/http1", "axum/tokio"]  # Enables HTTP/1 support in axum
 http2 = ["axum/http2", "axum/tokio"]  # Enables HTTP/2 support in axum
+tokio = ["axum/tokio"]
