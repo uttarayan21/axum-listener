@@ -1,5 +1,4 @@
 use crate::listener::{DualAddr, DualListener, DualStream, ToDualAddr};
-use axum::serve::Listener;
 
 /// A listener that can accept connections on multiple underlying listeners simultaneously.
 ///
@@ -170,9 +169,12 @@ impl MultiListener {
     /// This method can fail if there's an I/O error while accepting a connection
     /// from any of the underlying listeners.
     pub async fn accept(&self) -> Result<(DualStream, DualAddr), std::io::Error> {
-        let (out, idx, _rest) =
-            futures::future::select_all(self.listeners.iter().map(|listener| listener._accept()))
-                .await;
+        let (out, idx, _rest) = futures::future::select_all(
+            self.listeners
+                .iter()
+                .map(|listener| listener._accept_unpin()),
+        )
+        .await;
         tracing::trace!("Accepted connection on multi-listener from index {}", idx);
         out
     }
@@ -183,23 +185,12 @@ impl axum::serve::Listener for MultiListener {
     type Addr = MultiAddr;
 
     async fn accept(&mut self) -> (Self::Io, Self::Addr) {
-        let (out, _index, _rest) =
-            futures::future::select_all(self.listeners.iter_mut().map(|listener| {
-                Box::pin(async move {
-                    match listener {
-                        DualListener::Tcp(ref mut listener) => {
-                            let (io, addr) = Listener::accept(listener).await;
-                            (DualStream::Tcp(io), DualAddr::Tcp(addr))
-                        }
-                        #[cfg(unix)]
-                        DualListener::Uds(ref mut listener) => {
-                            let (io, addr) = Listener::accept(listener).await;
-                            (DualStream::Uds(io), DualAddr::Uds(addr))
-                        }
-                    }
-                })
-            }))
-            .await;
+        let (out, _index, _rest) = futures::future::select_all(
+            self.listeners
+                .iter_mut()
+                .map(|listener| listener._accept_axum_unpin()),
+        )
+        .await;
         tracing::trace!("Accepted connection on multi-listener from {}", _index);
         (out.0, MultiAddr { addrs: vec![out.1] })
     }

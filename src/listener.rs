@@ -323,7 +323,7 @@ impl DualListener {
         }
     }
 
-    pub(crate) fn _accept(
+    pub(crate) fn _accept_unpin(
         &self,
     ) -> impl core::future::Future<Output = Result<(DualStream, DualAddr), std::io::Error>>
            + Unpin
@@ -338,6 +338,37 @@ impl DualListener {
                 DualListener::Uds(listener) => {
                     let (stream, addr) = listener.accept().await?;
                     Ok((DualStream::Uds(stream), DualAddr::Uds(addr)))
+                }
+            }
+        })
+    }
+    pub(crate) async fn _accept_axum(&mut self) -> (DualStream, DualAddr) {
+        match self {
+            DualListener::Tcp(listener) => {
+                let (stream, addr) = Listener::accept(listener).await;
+                (DualStream::Tcp(stream), DualAddr::Tcp(addr))
+            }
+            #[cfg(unix)]
+            DualListener::Uds(listener) => {
+                let (stream, addr) = Listener::accept(listener).await;
+                (DualStream::Uds(stream), DualAddr::Uds(addr))
+            }
+        }
+    }
+
+    pub(crate) fn _accept_axum_unpin(
+        &mut self,
+    ) -> impl core::future::Future<Output = (DualStream, DualAddr)> + Unpin + use<'_> {
+        Box::pin(async move {
+            match self {
+                DualListener::Tcp(listener) => {
+                    let (stream, addr) = Listener::accept(listener).await;
+                    (DualStream::Tcp(stream), DualAddr::Tcp(addr))
+                }
+                #[cfg(unix)]
+                DualListener::Uds(listener) => {
+                    let (stream, addr) = Listener::accept(listener).await;
+                    (DualStream::Uds(stream), DualAddr::Uds(addr))
                 }
             }
         })
@@ -439,17 +470,7 @@ impl axum::serve::Listener for DualListener {
     type Io = DualStream;
     type Addr = DualAddr;
     async fn accept(&mut self) -> (Self::Io, Self::Addr) {
-        match self {
-            DualListener::Tcp(listener) => {
-                let (io, addr) = Listener::accept(listener).await;
-                (DualStream::Tcp(io), DualAddr::Tcp(addr))
-            }
-            #[cfg(unix)]
-            DualListener::Uds(listener) => {
-                let (io, addr) = Listener::accept(listener).await;
-                (DualStream::Uds(io), DualAddr::Uds(addr))
-            }
-        }
+        self._accept_axum().await
     }
 
     fn local_addr(&self) -> Result<Self::Addr, std::io::Error> {
