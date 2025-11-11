@@ -167,6 +167,7 @@ impl DuplexListener {
             )),
         }
     }
+
     pub async fn accept(&self) -> Result<(DuplexStream, DuplexAddr), std::io::Error> {
         match self {
             DuplexListener::Tcp(listener) => {
@@ -179,6 +180,26 @@ impl DuplexListener {
                 Ok((DuplexStream::Uds(stream), DuplexAddr::Uds(addr)))
             }
         }
+    }
+
+    pub(crate) fn _accept(
+        &self,
+    ) -> impl core::future::Future<Output = Result<(DuplexStream, DuplexAddr), std::io::Error>>
+           + Unpin
+           + use<'_> {
+        Box::pin(async move {
+            match self {
+                DuplexListener::Tcp(listener) => {
+                    let (stream, addr) = listener.accept().await?;
+                    Ok((DuplexStream::Tcp(stream), DuplexAddr::Tcp(addr)))
+                }
+                #[cfg(unix)]
+                DuplexListener::Uds(listener) => {
+                    let (stream, addr) = listener.accept().await?;
+                    Ok((DuplexStream::Uds(stream), DuplexAddr::Uds(addr)))
+                }
+            }
+        })
     }
 }
 

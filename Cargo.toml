@@ -7,10 +7,13 @@ edition = "2021"
 
 [dependencies]
 axum = { version = "0.8", default-features = false, features = ["tokio"] }
+futures = "0.3.31"
 tokio = { version = "1", default-features = false, features = ["net"] }
+tracing = "0.1.41"
 
 [dev-dependencies]
 axum = { version = "0.8" }
+tokio-test = "0.4.4"
 
 [features]
 default = ["http1", "remove-on-drop"]
