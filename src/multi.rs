@@ -205,7 +205,6 @@ impl axum::serve::Listener for MultiListener {
     }
 }
 
-#[cfg(feature = "tokio")]
 const _: () = {
     use super::MultiAddr;
     use axum::extract::connect_info::Connected;

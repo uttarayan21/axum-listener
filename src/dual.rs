@@ -109,8 +109,7 @@ impl core::str::FromStr for DualAddr {
             })?;
             Ok(DualAddr::Tcp(addr))
         } else if unix_like && !has_uds {
-            Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(std::io::Error::other(
                 "Unix domain sockets are not supported on this platform",
             ))
         } else {
@@ -315,8 +314,8 @@ impl DualListener {
     pub(crate) fn _accept_unpin(
         &self,
     ) -> impl core::future::Future<Output = Result<(DualStream, DualAddr), std::io::Error>>
-           + Unpin
-           + use<'_> {
+    + Unpin
+    + use<'_> {
         Box::pin(async move {
             match self {
                 DualListener::Tcp(listener) => {
@@ -471,6 +470,23 @@ impl axum::serve::Listener for DualListener {
     }
 }
 
+const _: () = {
+    use super::DualAddr;
+    use axum::extract::connect_info::Connected;
+    impl Connected<DualAddr> for DualAddr {
+        fn connect_info(remote_addr: DualAddr) -> Self {
+            remote_addr
+        }
+    }
+    use axum::serve;
+
+    impl Connected<serve::IncomingStream<'_, DualListener>> for DualAddr {
+        fn connect_info(stream: serve::IncomingStream<'_, DualListener>) -> Self {
+            stream.remote_addr().clone()
+        }
+    }
+};
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -494,28 +510,13 @@ mod tests {
             assert!(listener.is_ok());
             if let DualListener::Uds(uds_listener) = listener.unwrap() {
                 let addr = uds_listener.local_addr().unwrap();
-                assert_eq!(addr.as_pathname().unwrap(), "/tmp/test.sock");
+                assert_eq!(
+                    addr.as_pathname().unwrap(),
+                    std::path::Path::new("/tmp/test.sock")
+                );
             } else {
                 panic!("Expected UDS listener");
             }
         }
     }
 }
-
-#[cfg(feature = "tokio")]
-const _: () = {
-    use super::DualAddr;
-    use axum::extract::connect_info::Connected;
-    impl Connected<DualAddr> for DualAddr {
-        fn connect_info(remote_addr: DualAddr) -> Self {
-            remote_addr
-        }
-    }
-    use axum::serve;
-
-    impl Connected<serve::IncomingStream<'_, DualListener>> for DualAddr {
-        fn connect_info(stream: serve::IncomingStream<'_, DualListener>) -> Self {
-            stream.remote_addr().clone()
-        }
-    }
-};
