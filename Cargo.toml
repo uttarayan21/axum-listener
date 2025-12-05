@@ -1,10 +1,14 @@
 [package]
 name = "axum-listener"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/uttarayan21/axum-listener"
 description = "A simple listener for axum with UDS and TCP support"
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 
 [dependencies]
 axum = { version = "0.8", default-features = false, features = ["tokio"] }
