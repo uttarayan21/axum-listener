@@ -261,11 +261,6 @@ impl DualListener {
                 let listener = UnixListener::bind(path)?;
                 Ok(DualListener::Uds(listener))
             }
-            #[cfg(not(unix))]
-            DualAddr::Uds(_) => Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Unix domain sockets are not supported on this platform",
-            )),
         }
     }
 
