@@ -54,7 +54,7 @@ jobs:
       uses: codecov/codecov-action@v4.0.1
       with:
         flags: unittests
-        name: codecov-hello
+        name: codecov-axum-listener
         fail_ci_if_error: true
         token: ${{ secrets.CODECOV_TOKEN }}
         files: ./result
