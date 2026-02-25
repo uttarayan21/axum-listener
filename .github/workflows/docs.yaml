@@ -22,7 +22,7 @@ jobs:
     - uses: DeterminateSystems/flake-checker-action@main
 
     - name: Generate docs
-      run: nix build .#checks.x86_64-linux.hello-docs
+      run: nix build .#checks.x86_64-linux.axum-listener-docs
 
     - name: Setup Pages
       uses: actions/configure-pages@v5

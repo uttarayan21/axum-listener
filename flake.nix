@@ -74,7 +74,7 @@
               []
               ++ (lib.optionals pkgs.stdenv.isDarwin [
                 libiconv
-                apple-sdk_13
+                apple-sdk_26
               ]);
           }
           // (lib.optionalAttrs pkgs.stdenv.isLinux {
@@ -115,19 +115,9 @@
           };
 
         packages = let
-          pkg = craneLib.buildPackage (commonArgs
-            // {inherit cargoArtifacts;}
-            // {
-              postInstall = ''
-                mkdir -p $out/bin
-                mkdir -p $out/share/bash-completions
-                mkdir -p $out/share/fish/vendor_completions.d
-                mkdir -p $out/share/zsh/site-functions
-                $out/bin/${name} completions bash > $out/share/bash-completions/${name}.bash
-                $out/bin/${name} completions fish > $out/share/fish/vendor_completions.d/${name}.fish
-                $out/bin/${name} completions zsh > $out/share/zsh/site-functions/_${name}
-              '';
-            });
+          pkg =
+            craneLib.buildPackage (commonArgs
+              // {inherit cargoArtifacts;});
         in {
           "${name}" = pkg;
           default = pkg;
@@ -143,7 +133,7 @@
                   cargo-deny
                 ]
                 ++ (lib.optionals pkgs.stdenv.isDarwin [
-                  apple-sdk_13
+                  apple-sdk_26
                 ]);
             });
         };

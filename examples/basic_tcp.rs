@@ -6,14 +6,14 @@
 //! Run with: `cargo run --example basic_tcp`
 
 use axum::{
+    Router,
     extract::Path,
     http::StatusCode,
     response::{Html, Json},
     routing::{get, post},
-    Router,
 };
 use axum_listener::DualListener;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 
 #[tokio::main]

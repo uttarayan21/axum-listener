@@ -8,14 +8,14 @@
 //! Run with: `cargo run --example basic_uds`
 
 use axum::{
+    Router,
     extract::Path,
     http::StatusCode,
     response::{Html, Json},
     routing::{get, post},
-    Router,
 };
 use axum_listener::DualListener;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 
 #[tokio::main]
@@ -64,7 +64,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "  • curl --unix-socket {} http://localhost/api/data",
             socket_path
         );
-        println!("  • curl --unix-socket {} -X POST -H 'Content-Type: application/json' -d '{{\"test\":\"data\"}}' http://localhost/api/data", socket_path);
+        println!(
+            "  • curl --unix-socket {} -X POST -H 'Content-Type: application/json' -d '{{\"test\":\"data\"}}' http://localhost/api/data",
+            socket_path
+        );
 
         // Start the server
         axum::serve(listener, app).await?;

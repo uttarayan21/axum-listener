@@ -7,14 +7,14 @@
 //! Run with: `cargo run --example multi_listener`
 
 use axum::{
+    Router,
     extract::{ConnectInfo, Path},
     http::StatusCode,
     response::{Html, Json},
     routing::{get, post},
-    Router,
 };
 use axum_listener::{DualAddr, MultiAddr, MultiListener};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 
 #[tokio::main]
