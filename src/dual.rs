@@ -197,9 +197,9 @@ impl ToDualAddr for &DualAddr {
 #[cfg(unix)]
 impl ToDualAddr for &std::path::Path {
     fn to_dual_addr(&self) -> Result<DualAddr, std::io::Error> {
-        Ok(DualAddr::Uds(From::from(
+        Ok(DualAddr::Uds(
             std::os::unix::net::SocketAddr::from_pathname(self)?,
-        )))
+        ))
     }
 }
 
