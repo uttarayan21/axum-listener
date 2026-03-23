@@ -42,7 +42,6 @@ pub enum DualListener {
 ///
 /// This enum is used to represent the local and remote addresses for connections
 /// accepted by [`DualListener`]. It automatically implements cleanup for UDS
-/// socket files when the `remove-on-drop` feature is enabled.
 ///
 /// # Examples
 ///
@@ -65,7 +64,7 @@ pub enum DualAddr {
     Tcp(core::net::SocketAddr),
     /// A Unix Domain Socket address
     #[cfg(unix)]
-    Uds(tokio::net::unix::SocketAddr),
+    Uds(std::os::unix::net::SocketAddr),
 }
 
 impl From<core::net::SocketAddr> for DualAddr {
@@ -77,6 +76,13 @@ impl From<core::net::SocketAddr> for DualAddr {
 #[cfg(unix)]
 impl From<tokio::net::unix::SocketAddr> for DualAddr {
     fn from(addr: tokio::net::unix::SocketAddr) -> Self {
+        DualAddr::Uds(From::from(addr))
+    }
+}
+
+#[cfg(unix)]
+impl From<std::os::unix::net::SocketAddr> for DualAddr {
+    fn from(addr: std::os::unix::net::SocketAddr) -> Self {
         DualAddr::Uds(addr)
     }
 }
@@ -93,7 +99,7 @@ impl core::str::FromStr for DualAddr {
             #[cfg(unix)]
             {
                 let path = s.trim_start_matches("unix:");
-                let addr = From::from(std::os::unix::net::SocketAddr::from_pathname(path)?);
+                let addr = std::os::unix::net::SocketAddr::from_pathname(path)?;
                 Ok(DualAddr::Uds(addr))
             }
             #[cfg(not(unix))]
@@ -172,7 +178,7 @@ impl ToDualAddr for core::net::SocketAddr {
 #[cfg(unix)]
 impl ToDualAddr for tokio::net::unix::SocketAddr {
     fn to_dual_addr(&self) -> Result<DualAddr, std::io::Error> {
-        Ok(DualAddr::Uds(self.clone()))
+        Ok(DualAddr::Uds(From::from(self.clone())))
     }
 }
 
@@ -301,6 +307,7 @@ impl DualListener {
             #[cfg(unix)]
             DualListener::Uds(listener) => {
                 let (stream, addr) = listener.accept().await?;
+                let addr = From::from(addr);
                 Ok((DualStream::Uds(stream), DualAddr::Uds(addr)))
             }
         }
@@ -320,6 +327,7 @@ impl DualListener {
                 #[cfg(unix)]
                 DualListener::Uds(listener) => {
                     let (stream, addr) = listener.accept().await?;
+                    let addr = From::from(addr);
                     Ok((DualStream::Uds(stream), DualAddr::Uds(addr)))
                 }
             }
@@ -334,6 +342,7 @@ impl DualListener {
             #[cfg(unix)]
             DualListener::Uds(listener) => {
                 let (stream, addr) = Listener::accept(listener).await;
+                let addr = From::from(addr);
                 (DualStream::Uds(stream), DualAddr::Uds(addr))
             }
         }
@@ -351,6 +360,7 @@ impl DualListener {
                 #[cfg(unix)]
                 DualListener::Uds(listener) => {
                     let (stream, addr) = Listener::accept(listener).await;
+                    let addr = From::from(addr);
                     (DualStream::Uds(stream), DualAddr::Uds(addr))
                 }
             }
@@ -460,7 +470,9 @@ impl axum::serve::Listener for DualListener {
         match self {
             DualListener::Tcp(listener) => Listener::local_addr(listener).map(DualAddr::Tcp),
             #[cfg(unix)]
-            DualListener::Uds(listener) => Listener::local_addr(listener).map(DualAddr::Uds),
+            DualListener::Uds(listener) => Listener::local_addr(listener)
+                .map(From::from)
+                .map(DualAddr::Uds),
         }
     }
 }
@@ -501,6 +513,7 @@ mod tests {
     async fn test_uds_bind() {
         #[cfg(unix)]
         {
+            std::fs::remove_file("/tmp/test.sock").ok(); // Clean up before test
             let listener = DualListener::bind("/tmp/test.sock").await;
             assert!(listener.is_ok());
             if let DualListener::Uds(uds_listener) = listener.unwrap() {

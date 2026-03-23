@@ -14,7 +14,6 @@
 //!
 //! - `http1` (default): Enables HTTP/1 support in axum
 //! - `http2`: Enables HTTP/2 support in axum
-//! - `remove-on-drop` (default): Automatically removes UDS socket files when the address is dropped
 //!
 //! ## Quick Start
 //!
