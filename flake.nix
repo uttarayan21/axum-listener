@@ -131,6 +131,7 @@
                   stableToolchainWithRustAnalyzer
                   cargo-nextest
                   cargo-deny
+                  release-plz
                 ]
                 ++ (lib.optionals pkgs.stdenv.isDarwin [
                   apple-sdk_26
